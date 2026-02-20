@@ -65,6 +65,8 @@ html, body, .stApp {{
     font-size: 17px;
     font-weight: 700;
     margin: 28px 0 12px 0;
+    padding-left: 12px;
+    border-left: 3px solid {ACCENT};
 }}
 
 /* Expanders */
@@ -162,12 +164,22 @@ if df_all.empty:
     st.stop()
 
 # ── Filter bar ───────────────────────────────────────────────────────────────────
-# ── Page title ───────────────────────────────────────────────────────────────────
-st.markdown(
-    "<div style='font-size:26px;font-weight:800;color:#0F172A;margin-bottom:20px;'>"
-    "Spending Overview</div>",
-    unsafe_allow_html=True,
-)
+# ── Header banner ────────────────────────────────────────────────────────────────
+st.markdown("""
+<div style="
+    background: linear-gradient(135deg, #1B3A6B 0%, #2563EB 100%);
+    border-radius: 14px;
+    padding: 28px 32px;
+    margin-bottom: 20px;
+">
+    <div style="font-size:28px;font-weight:800;color:white;letter-spacing:-0.02em;">
+        Spending Dashboard
+    </div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:6px;">
+        Your personal finance overview
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # ── Hero placeholder (fills in after filters are applied) ─────────────────────────
 hero_slot = st.empty()
@@ -351,7 +363,19 @@ for i, (col, (_, row)) in enumerate(zip(cols, top_cats.iterrows())):
 st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
 # ── Explore ──────────────────────────────────────────────────────────────────────
-st.markdown("<div class='section-title'>Explore</div>", unsafe_allow_html=True)
+st.markdown("""
+<div style="
+    background: linear-gradient(135deg, #1B3A6B 0%, #2563EB 100%);
+    border-radius: 12px;
+    padding: 20px 28px;
+    margin: 8px 0 16px 0;
+">
+    <div style="font-size:18px;font-weight:700;color:white;">Explore</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:4px;">
+        Dive deeper into your spending
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 
 def chart_layout():
