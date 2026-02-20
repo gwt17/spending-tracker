@@ -162,24 +162,39 @@ if df_all.empty:
     st.stop()
 
 # ── Filter bar ───────────────────────────────────────────────────────────────────
-min_date  = df_all["Date"].min().date()
-max_date  = df_all["Date"].max().date()
-all_cats  = sorted(df_all["Category"].unique().tolist())
+# ── Page title ───────────────────────────────────────────────────────────────────
+st.markdown(
+    "<div style='font-size:26px;font-weight:800;color:#0F172A;margin-bottom:20px;'>"
+    "Spending Overview</div>",
+    unsafe_allow_html=True,
+)
 
+# ── Hero placeholder (fills in after filters are applied) ─────────────────────────
+hero_slot = st.empty()
+
+# ── Filter bar ───────────────────────────────────────────────────────────────────
+min_date = df_all["Date"].min().date()
+max_date = df_all["Date"].max().date()
+all_cats = sorted(df_all["Category"].unique().tolist())
+
+st.markdown("<div style='margin-bottom:8px;'></div>", unsafe_allow_html=True)
 f1, f2, f3, f4 = st.columns([1, 1.6, 2.5, 0.5])
 with f1:
     cards = ["All"] + sorted(df_all["Card"].unique().tolist())
-    selected_card = st.selectbox("Card", cards)
+    selected_card = st.selectbox("Card", cards, label_visibility="collapsed")
 with f2:
     date_range = st.date_input("Date Range", value=(min_date, max_date),
-                               min_value=min_date, max_value=max_date)
+                               min_value=min_date, max_value=max_date,
+                               label_visibility="collapsed")
 with f3:
-    selected_cats = st.multiselect("Categories", all_cats, default=all_cats)
+    selected_cats = st.multiselect("Categories", all_cats, default=[],
+                                   placeholder="All categories",
+                                   label_visibility="collapsed")
 with f4:
-    st.markdown("<div style='margin-top:26px;'></div>", unsafe_allow_html=True)
-    if st.button("↺ Reload"):
+    if st.button("↺ Reload", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
+st.markdown("<div style='margin-bottom:16px;'></div>", unsafe_allow_html=True)
 
 # ── Apply filters ────────────────────────────────────────────────────────────────
 df = df_all.copy()
@@ -202,26 +217,19 @@ avg_monthly    = total_spend / n_months if n_months else 0
 current_period = df["YearMonth"].max()
 this_month_amt = monthly_totals.get(current_period, 0)
 prev_period    = current_period - 1
-prev_month_amt = monthly_totals.get(prev_period, 0)
-mom_delta      = this_month_amt - prev_month_amt
+mom_delta      = this_month_amt - monthly_totals.get(prev_period, 0)
 current_year   = df["Date"].max().year
 ytd            = df[df["Date"].dt.year == current_year]["Amount"].sum()
 cutoff_12m     = df["Date"].max() - pd.DateOffset(months=12)
 rolling_12     = df[df["Date"] >= cutoff_12m]["Amount"].sum()
 
-# ── Page title ───────────────────────────────────────────────────────────────────
-st.markdown(
-    "<div style='font-size:26px;font-weight:800;color:#0F172A;margin-bottom:20px;'>"
-    "Spending Overview</div>",
-    unsafe_allow_html=True,
-)
-
-# ── Hero cards ───────────────────────────────────────────────────────────────────
+# ── Hero cards (rendered into the placeholder above the filters) ──────────────────
 delta_class = "up" if mom_delta > 0 else "down"
 delta_arrow = "↑" if mom_delta > 0 else "↓"
 
-st.markdown(f"""
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;">
+with hero_slot.container():
+    st.markdown(f"""
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:8px;">
     <div class="card card-accent">
         <div class="card-label">YTD Spend</div>
         <div class="card-value">${ytd:,.0f}</div>
