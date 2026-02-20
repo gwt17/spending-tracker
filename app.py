@@ -151,8 +151,8 @@ c4.metric("Latest Month",  f"${this_month_amt:,.2f}", str(current_period))
 st.markdown("---")
 
 # ── Tabs ────────────────────────────────────────────────────────────────────────
-tab_monthly, tab_cats, tab_merchants, tab_subs = st.tabs([
-    "📅 Monthly", "🏷️ Categories", "🏪 Merchants", "🔁 Subscriptions"
+tab_monthly, tab_cats, tab_merchants, tab_subs, tab_large, tab_search = st.tabs([
+    "📅 Monthly", "🏷️ Categories", "🏪 Merchants", "🔁 Subscriptions", "⚠️ Large Transactions", "🔍 Merchant Search"
 ])
 
 # ── Monthly ─────────────────────────────────────────────────────────────────────
@@ -398,3 +398,99 @@ with tab_subs:
             use_container_width=True,
             hide_index=True,
         )
+
+# ── Large Transactions ───────────────────────────────────────────────────────────
+with tab_large:
+    percentile = st.slider(
+        "Flag transactions in the top X% by amount", 1, 25, 5,
+        help="Top 5% means only your largest charges are flagged."
+    )
+
+    threshold = df["Amount"].quantile(1 - percentile / 100)
+    large = (
+        df[df["Amount"] >= threshold]
+        .sort_values("Amount", ascending=False)
+        .reset_index(drop=True)
+    )
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Threshold",         f"${threshold:,.2f}")
+    c2.metric("Flagged Transactions", f"{len(large):,}")
+    c3.metric("Total Flagged Spend",  f"${large['Amount'].sum():,.2f}")
+
+    # Scatter plot — flagged transactions over time
+    fig = px.scatter(
+        large,
+        x="Date", y="Amount",
+        color="Category",
+        hover_data={"Description": True, "Card": True},
+        title=f"Top {percentile}% Largest Transactions Over Time",
+        labels={"Amount": "Amount ($)"},
+    )
+    fig.update_layout(yaxis_tickprefix="$", yaxis_tickformat=",.0f")
+    fig.update_traces(marker=dict(size=10, opacity=0.8))
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Table
+    st.dataframe(
+        large[["Date", "Description", "Category", "Amount", "Card"]]
+        .style.format({"Amount": "${:,.2f}", "Date": lambda d: d.strftime("%Y-%m-%d")}),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+# ── Merchant Search ──────────────────────────────────────────────────────────────
+with tab_search:
+    query = st.text_input("Search merchant name", placeholder="e.g. Amazon, Delta, Whole Foods")
+
+    if not query:
+        st.info("Type a merchant name above to see all matching transactions.")
+    else:
+        results = df[df["Description"].str.contains(query, case=False, na=False)].copy()
+
+        if results.empty:
+            st.warning(f"No transactions found matching \"{query}\".")
+        else:
+            matched_merchants = results["Description"].unique()
+            total     = results["Amount"].sum()
+            visits    = len(results)
+            avg_visit = results["Amount"].mean()
+            first     = results["Date"].min().date()
+            last      = results["Date"].max().date()
+
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Total Spent",     f"${total:,.2f}")
+            c2.metric("Transactions",    f"{visits:,}")
+            c3.metric("Avg per Visit",   f"${avg_visit:,.2f}")
+            c4.metric("Date Range",      f"{first} → {last}")
+
+            if len(matched_merchants) > 1:
+                st.caption(f"Matching merchants: {', '.join(matched_merchants)}")
+
+            # Spend over time
+            over_time = (
+                results.groupby("YearMonth")["Amount"]
+                .sum()
+                .reset_index()
+                .sort_values("YearMonth")
+            )
+            over_time["Month"] = over_time["YearMonth"].astype(str)
+
+            fig = px.bar(
+                over_time, x="Month", y="Amount",
+                title=f'Monthly Spend — "{query}"',
+                labels={"Amount": "Spend ($)", "Month": ""},
+                text_auto=".2s",
+            )
+            fig.update_layout(yaxis_tickprefix="$", yaxis_tickformat=",.0f")
+            st.plotly_chart(fig, use_container_width=True)
+
+            # All transactions
+            st.subheader("All Matching Transactions")
+            st.dataframe(
+                results[["Date", "Description", "Category", "Amount", "Card"]]
+                .sort_values("Date", ascending=False)
+                .style.format({"Amount": "${:,.2f}", "Date": lambda d: d.strftime("%Y-%m-%d")}),
+                use_container_width=True,
+                hide_index=True,
+            )
