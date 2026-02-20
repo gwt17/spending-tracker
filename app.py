@@ -77,6 +77,26 @@ section[data-testid="stSidebar"] hr {{
     font-weight: 700;
     margin: 28px 0 12px 0;
 }}
+
+/* Expanders */
+[data-testid="stExpander"] {{
+    background: white;
+    border-radius: 10px;
+    border: 1px solid #E2E8F0;
+    margin-bottom: 8px;
+}}
+[data-testid="stExpander"] summary {{
+    color: #1B3A6B !important;
+    font-weight: 600;
+    font-size: 14px;
+}}
+[data-testid="stExpander"] summary p {{
+    color: #1B3A6B !important;
+    font-weight: 600;
+}}
+[data-testid="stExpander"] summary span {{
+    color: #1B3A6B !important;
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -288,38 +308,46 @@ if other_amt > 0:
                         "Pct": cat.iloc[TOP_N:]["Pct"].sum()}])
     ], ignore_index=True)
 
-segments_html = ""
-legend_html   = ""
-for i, row in top_cats.iterrows():
-    color = CAT_COLORS[i % len(CAT_COLORS)]
-    segments_html += (
-        f'<div style="width:{row["Pct"]:.1f}%;background:{color};height:100%;"></div>'
-    )
-    legend_html += f"""
-    <div style="display:flex;flex-direction:column;min-width:110px;">
-        <div style="display:flex;align-items:center;gap:6px;">
-            <div style="width:8px;height:8px;border-radius:50%;background:{color};flex-shrink:0;"></div>
-            <span style="font-size:12px;color:#64748B;white-space:nowrap;overflow:hidden;
-                         text-overflow:ellipsis;max-width:100px;">{row["Category"]}</span>
-        </div>
-        <div style="font-size:18px;font-weight:700;color:#0F172A;margin-top:4px;">
-            ${row["Total"]:,.0f}
-        </div>
-        <div style="font-size:11px;color:#94A3B8;">{row["Pct"]:.1f}%</div>
-    </div>"""
-
 st.markdown("<div class='section-title'>Spending by Category</div>", unsafe_allow_html=True)
-st.markdown(f"""
-<div class="card" style="margin-bottom:24px;">
-    <div style="display:flex;height:8px;border-radius:6px;overflow:hidden;
-                margin-bottom:20px;gap:2px;">
-        {segments_html}
-    </div>
-    <div style="display:flex;flex-wrap:wrap;gap:20px;">
-        {legend_html}
-    </div>
-</div>
-""", unsafe_allow_html=True)
+
+# Stacked bar
+fig_cat_bar = go.Figure()
+for i, row in top_cats.iterrows():
+    fig_cat_bar.add_trace(go.Bar(
+        name=row["Category"],
+        x=[row["Pct"]],
+        y=[""],
+        orientation="h",
+        marker_color=CAT_COLORS[i % len(CAT_COLORS)],
+        hovertemplate=f"{row['Category']}: ${row['Total']:,.0f} ({row['Pct']:.1f}%)<extra></extra>",
+    ))
+fig_cat_bar.update_layout(
+    barmode="stack", height=55,
+    margin=dict(l=0, r=0, t=0, b=0),
+    paper_bgcolor="white", plot_bgcolor="white",
+    showlegend=False,
+    xaxis=dict(showgrid=False, showticklabels=False, range=[0, 100]),
+    yaxis=dict(showgrid=False, showticklabels=False),
+)
+st.plotly_chart(fig_cat_bar, use_container_width=True, config={"displayModeBar": False})
+
+# Category cards below the bar
+cols = st.columns(len(top_cats))
+for i, (col, (_, row)) in enumerate(zip(cols, top_cats.iterrows())):
+    color = CAT_COLORS[i % len(CAT_COLORS)]
+    col.markdown(
+        f"<div style='border-top:3px solid {color};padding-top:8px;'>"
+        f"<div style='font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;"
+        f"letter-spacing:0.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>"
+        f"{row['Category']}</div>"
+        f"<div style='font-size:20px;font-weight:700;color:#0F172A;margin-top:4px;'>"
+        f"${row['Total']:,.0f}</div>"
+        f"<div style='font-size:12px;color:#94A3B8;'>{row['Pct']:.1f}%</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
 # ── Explore ──────────────────────────────────────────────────────────────────────
 st.markdown("<div class='section-title'>Explore</div>", unsafe_allow_html=True)
