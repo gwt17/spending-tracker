@@ -50,14 +50,32 @@ A transaction is a duplicate only if it appears across multiple files with the s
 Date, Description, Amount, Card, and sequence number. The sequence number preserves
 legitimate same-day same-amount charges at the same merchant.
 
-## Dashboard sections
-- **Summary metrics** — total spend, avg monthly, biggest month, latest month
-- **Monthly** — bar chart, cumulative line, month-over-month delta
-- **Categories** — bar + pie chart, stacked area over time, "Other" threshold slider
-- **Merchants** — top N merchants by total spend (adjustable slider)
-- **Subscriptions** — heuristic detection by cadence (weekly/monthly/quarterly/annual)
+## Dashboard design
+**Theme:** Light background (#F0F4FA), deep blue accent (#1B3A6B), white cards.
+Custom CSS injected via `st.markdown` at the top of `app.py`.
+
+**Layout (top to bottom):**
+1. **Blue gradient banner** — "Spending Dashboard" title with subtitle
+2. **Hero metrics** — YTD spend, 12-month rolling, monthly average, this month (with MoM delta)
+   - Rendered via `st.empty()` placeholder so they appear above the filters but compute after
+3. **Filter bar** — horizontal row: Card selector, Date Range, Categories (multiselect,
+   defaults to empty = all), Reload button
+4. **Monthly Spend** — bar chart with dashed average line (plotly)
+5. **Spending by Category** — plotly stacked bar + color-coded category cards
+6. **Blue gradient Explore banner** — visually separates overview from detail sections
+7. **Explore expanders** (collapsible):
+   - Categories — Full Breakdown (bar, pie, area over time, Other threshold slider)
+   - Top Merchants (adjustable top-N slider)
+   - Merchant Search (partial name match, summary metrics, monthly chart, transaction table)
+   - Subscriptions (heuristic: weekly/monthly/quarterly/annual cadence detection)
+   - Large Transactions (top X% by amount, scatter plot over time)
+
+**Design notes:**
+- Section titles have a left blue border accent
+- All charts use white plot/paper background
+- Expanders styled with white background and blue header text
+- Category colors: `CAT_COLORS` list defined at top of `app.py`
 
 ## What's planned next
-- Merchant search/filter
-- Flag unusually large transactions
 - Automate monthly CSV merging workflow
+- Any further UI refinements
