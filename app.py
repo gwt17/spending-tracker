@@ -8,7 +8,7 @@ st.set_page_config(
     page_title="Spending Tracker",
     page_icon="💳",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # ── Theme ───────────────────────────────────────────────────────────────────────
@@ -23,24 +23,13 @@ html, body, .stApp {{
 }}
 #MainMenu, footer, .stDeployButton {{ display: none !important; }}
 
-/* Sidebar */
-section[data-testid="stSidebar"] > div:first-child {{
-    background-color: {ACCENT};
-    padding-top: 2rem;
-}}
-section[data-testid="stSidebar"] label,
-section[data-testid="stSidebar"] p,
-section[data-testid="stSidebar"] .stMarkdown {{
-    color: rgba(255,255,255,0.8) !important;
-}}
-section[data-testid="stSidebar"] h2 {{
-    color: white !important;
-    font-size: 15px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-}}
-section[data-testid="stSidebar"] hr {{
-    border-color: rgba(255,255,255,0.15) !important;
+/* Filter bar */
+.filter-bar {{
+    background: white;
+    border-radius: 10px;
+    padding: 14px 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+    margin-bottom: 24px;
 }}
 
 /* Metric cards */
@@ -172,19 +161,23 @@ if df_all.empty:
         st.rerun()
     st.stop()
 
-# ── Sidebar ──────────────────────────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown("## Filters")
+# ── Filter bar ───────────────────────────────────────────────────────────────────
+min_date  = df_all["Date"].min().date()
+max_date  = df_all["Date"].max().date()
+all_cats  = sorted(df_all["Category"].unique().tolist())
+
+f1, f2, f3, f4 = st.columns([1, 1.6, 2.5, 0.5])
+with f1:
     cards = ["All"] + sorted(df_all["Card"].unique().tolist())
     selected_card = st.selectbox("Card", cards)
-    min_date  = df_all["Date"].min().date()
-    max_date  = df_all["Date"].max().date()
+with f2:
     date_range = st.date_input("Date Range", value=(min_date, max_date),
                                min_value=min_date, max_value=max_date)
-    all_cats      = sorted(df_all["Category"].unique().tolist())
+with f3:
     selected_cats = st.multiselect("Categories", all_cats, default=all_cats)
-    st.markdown("---")
-    if st.button("Reload Data"):
+with f4:
+    st.markdown("<div style='margin-top:26px;'></div>", unsafe_allow_html=True)
+    if st.button("↺ Reload"):
         st.cache_data.clear()
         st.rerun()
 
