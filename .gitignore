@@ -2,5 +2,5 @@
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
-.streamlit/
+.streamlit/secrets.toml
 data/
