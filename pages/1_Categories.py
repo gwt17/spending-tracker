@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from utils import ACCENT, CAT_COLORS, chart_layout, date_filter, inject_global_css, load_all
+from utils import ACCENT, CAT_COLORS, chart_layout, date_filter, inject_global_css, load_all, render_drilldown
 
 inject_global_css()
 
@@ -104,32 +104,43 @@ fig.update_layout(
 fig.update_traces(
     hovertemplate="<b>%{y}</b><br>$%{x:,.2f}<extra></extra>"
 )
-st.plotly_chart(fig, use_container_width=True)
-
-# ── Clean summary table ────────────────────────────────────────────────────────
-st.markdown("<div class='section-title'>Breakdown</div>", unsafe_allow_html=True)
-
-rows_html = ""
-for i, row in cat_full.iterrows():
-    color = CAT_COLORS[i % len(CAT_COLORS)]
-    bar_width = row["% of Spend"] * 2  # scale for visual
-    rows_html += f"""
-<div style="display:grid;grid-template-columns:16px 1fr 60px 100px 70px 70px;
-     align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #F1F5F9;">
-  <div style="width:10px;height:10px;border-radius:50%;background:{color};flex-shrink:0;"></div>
-  <div>
-    <div style="font-family:'DM Sans',sans-serif;font-size:14px;color:#0F172A;font-weight:500;">{row['Category']}</div>
-    <div style="background:{color}22;height:4px;border-radius:2px;margin-top:5px;width:{min(bar_width,100):.0f}%;"></div>
-  </div>
-  <div style="font-family:'DM Sans',sans-serif;font-size:13px;color:#475569;text-align:right;">{row['% of Spend']:.1f}%</div>
-  <div style="font-family:'DM Mono',monospace;font-size:14px;color:#0F172A;text-align:right;">${row['Total']:,.2f}</div>
-  <div style="font-family:'DM Sans',sans-serif;font-size:13px;color:#475569;text-align:right;">{int(row['Transactions'])} txns</div>
-  <div style="font-family:'DM Mono',monospace;font-size:13px;color:#475569;text-align:right;">${row['Avg per Txn']:,.2f} avg</div>
-</div>"""
-
 st.markdown(
-    f"<div style='background:white;border-radius:12px;padding:4px 20px 12px;"
-    f"box-shadow:0 2px 8px rgba(27,58,107,0.08);border:1px solid rgba(27,58,107,0.07);"
-    f"margin-bottom:24px;'>{rows_html}</div>",
+    "<div style='font-family:\"DM Sans\",sans-serif;font-size:12px;color:#94A3B8;"
+    "margin-bottom:4px;'>Click a bar to drill into transactions for that category.</div>",
     unsafe_allow_html=True,
 )
+chart_event = st.plotly_chart(fig, use_container_width=True, on_select="rerun", key="cat_bar")
+
+# ── Breakdown table ────────────────────────────────────────────────────────────
+st.markdown("<div class='section-title'>Breakdown</div>", unsafe_allow_html=True)
+st.markdown(
+    "<div style='font-family:\"DM Sans\",sans-serif;font-size:12px;color:#94A3B8;margin-bottom:6px;'>"
+    "Click a column header to sort. Click a row to drill into that category's transactions.</div>",
+    unsafe_allow_html=True,
+)
+table_event = st.dataframe(
+    cat_full[["Category", "Total", "% of Spend", "Transactions", "Avg per Txn"]],
+    on_select="rerun",
+    selection_mode="single-row",
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "Total":        st.column_config.NumberColumn("Total",      format="$%.2f"),
+        "% of Spend":   st.column_config.ProgressColumn("% of Spend", min_value=0, max_value=100, format="%.1f%%"),
+        "Avg per Txn":  st.column_config.NumberColumn("Avg / Txn", format="$%.2f"),
+        "Transactions": st.column_config.NumberColumn("Txns"),
+    },
+    key="cat_table",
+)
+
+# ── Category drilldown ────────────────────────────────────────────────────────
+# Table row click takes priority; chart bar click is the fallback.
+selected_cat = None
+if table_event.selection["rows"]:
+    selected_cat = cat_full.iloc[table_event.selection["rows"][0]]["Category"]
+elif chart_event.selection["points"]:
+    selected_cat = chart_event.selection["points"][0].get("y")
+
+if selected_cat and selected_cat != "Other":
+    df_drill = df[df["Category"] == selected_cat].sort_values("Amount", ascending=False)
+    render_drilldown(df_drill, f"{selected_cat} — {len(df_drill)} transactions")

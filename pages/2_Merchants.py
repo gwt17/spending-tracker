@@ -5,7 +5,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import plotly.express as px
 import streamlit as st
 
-from utils import ACCENT, chart_layout, date_filter, inject_global_css, load_all
+from utils import ACCENT, chart_layout, date_filter, inject_global_css, load_all, render_drilldown
 
 inject_global_css()
 
@@ -92,34 +92,42 @@ fig.update_layout(
 fig.update_traces(
     hovertemplate="<b>%{y}</b><br>$%{x:,.2f}<extra></extra>"
 )
-st.plotly_chart(fig, use_container_width=True)
+st.markdown(
+    "<div style='font-family:\"DM Sans\",sans-serif;font-size:12px;color:#94A3B8;margin-bottom:4px;'>"
+    "Click a bar to drill into that merchant's transactions.</div>",
+    unsafe_allow_html=True,
+)
+merch_chart_event = st.plotly_chart(fig, use_container_width=True, on_select="rerun", key="merch_bar")
 
-# ── Merchant table ────────────────────────────────────────────────────────────
+# ── Merchant detail table ──────────────────────────────────────────────────────
 st.markdown("<div class='section-title'>Detail</div>", unsafe_allow_html=True)
+st.markdown(
+    "<div style='font-family:\"DM Sans\",sans-serif;font-size:12px;color:#94A3B8;margin-bottom:6px;'>"
+    "Click a row to drill into that merchant's transactions.</div>",
+    unsafe_allow_html=True,
+)
 
-rows_html = ""
-for _, row in merchants.iterrows():
-    rows_html += f"""
-<tr style="border-bottom:1px solid #F1F5F9;">
-  <td style="padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;color:#0F172A;">{row['Merchant']}</td>
-  <td style="padding:10px 12px;font-family:'DM Mono',monospace;font-size:13px;color:#0F172A;text-align:right;">${row['Total']:,.2f}</td>
-  <td style="padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;color:#475569;text-align:right;">{int(row['Visits'])} visits</td>
-  <td style="padding:10px 12px;font-family:'DM Mono',monospace;font-size:13px;color:#475569;text-align:right;">${row['Avg per Visit']:,.2f} avg</td>
-</tr>"""
+merch_table_event = st.dataframe(
+    merchants[["Merchant", "Total", "Visits", "Avg per Visit"]],
+    on_select="rerun",
+    selection_mode="single-row",
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "Total":         st.column_config.NumberColumn("Total",       format="$%.2f"),
+        "Avg per Visit": st.column_config.NumberColumn("Avg / Visit", format="$%.2f"),
+        "Visits":        st.column_config.NumberColumn("Visits"),
+    },
+    key="merch_table",
+)
 
-st.markdown(f"""
-<div style="background:white;border-radius:12px;box-shadow:0 2px 8px rgba(27,58,107,0.08);
-border:1px solid rgba(27,58,107,0.07);overflow:hidden;">
-  <table style="width:100%;border-collapse:collapse;">
-    <thead>
-      <tr style="border-bottom:2px solid #F1F5F9;background:#F8FAFC;">
-        <th style="padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.06em;text-align:left;">Merchant</th>
-        <th style="padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.06em;text-align:right;">Total</th>
-        <th style="padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.06em;text-align:right;">Visits</th>
-        <th style="padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.06em;text-align:right;">Avg / Visit</th>
-      </tr>
-    </thead>
-    <tbody>{rows_html}</tbody>
-  </table>
-</div>
-""", unsafe_allow_html=True)
+# Table row takes priority over chart bar
+selected_merch = None
+if merch_table_event.selection["rows"]:
+    selected_merch = merchants.iloc[merch_table_event.selection["rows"][0]]["Merchant"]
+elif merch_chart_event.selection["points"]:
+    selected_merch = merch_chart_event.selection["points"][0].get("y")
+
+if selected_merch:
+    df_merch_drill = df[df["Description"] == selected_merch].sort_values("Amount", ascending=False)
+    render_drilldown(df_merch_drill, f"{selected_merch} — {len(df_merch_drill)} transactions")

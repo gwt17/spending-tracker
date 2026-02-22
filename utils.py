@@ -52,7 +52,12 @@ TRANSFER_KEYWORDS = [
 ]
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR              = Path(__file__).parent / "data"
+OVERRIDES_PATH        = DATA_DIR / "overrides.csv"
+CUSTOM_KEYWORDS_PATH  = DATA_DIR / "transfer_keywords.csv"
+FINANCE_CONFIG_PATH   = DATA_DIR / "finance_config.csv"
+_OVERRIDE_COLS        = ["Date", "Description", "OriginalAmount", "Action", "NewAmount", "NewCategory", "Notes"]
+_FINANCE_CONFIG_COLS  = ["Name", "Type", "AmountPerYear", "EmployerMatch", "Notes"]
 
 
 # ── Merchant name cleanup ─────────────────────────────────────────────────────
@@ -69,6 +74,82 @@ def clean_merchant(name: str) -> str:
     if name.isupper():
         name = name.title()
     return name
+
+
+# ── Overrides helpers ─────────────────────────────────────────────────────────
+def load_overrides() -> pd.DataFrame:
+    """Load data/overrides.csv. Never cached — always reads fresh from disk."""
+    if OVERRIDES_PATH.exists():
+        try:
+            return pd.read_csv(OVERRIDES_PATH)
+        except Exception:
+            pass
+    return pd.DataFrame(columns=_OVERRIDE_COLS)
+
+
+def save_override(date_str: str, description: str, original_amount: float,
+                  action: str, new_amount=None, new_category=None, notes=None) -> None:
+    """Append one override row to data/overrides.csv."""
+    ov = load_overrides()
+    ov = pd.concat([ov, pd.DataFrame([{
+        "Date":           date_str,
+        "Description":    description,
+        "OriginalAmount": round(float(original_amount), 2),
+        "Action":         action,
+        "NewAmount":      round(float(new_amount), 2) if new_amount is not None else "",
+        "NewCategory":    new_category or "",
+        "Notes":          notes or "",
+    }])], ignore_index=True)
+    ov.to_csv(OVERRIDES_PATH, index=False)
+
+
+# ── Custom transfer keyword helpers ───────────────────────────────────────────
+def load_custom_keywords() -> pd.DataFrame:
+    """Load data/transfer_keywords.csv. Never cached — always reads fresh."""
+    if CUSTOM_KEYWORDS_PATH.exists():
+        try:
+            return pd.read_csv(CUSTOM_KEYWORDS_PATH)
+        except Exception:
+            pass
+    return pd.DataFrame(columns=["Keyword", "Notes"])
+
+
+def save_custom_keyword(keyword: str, notes: str = "") -> bool:
+    """Append keyword to data/transfer_keywords.csv. Returns False if duplicate."""
+    kws = load_custom_keywords()
+    if keyword.lower().strip() in kws["Keyword"].str.lower().str.strip().values:
+        return False
+    kws = pd.concat([kws, pd.DataFrame([{
+        "Keyword": keyword.lower().strip(),
+        "Notes":   notes.strip(),
+    }])], ignore_index=True)
+    kws.to_csv(CUSTOM_KEYWORDS_PATH, index=False)
+    return True
+
+
+# ── Finance config helpers ────────────────────────────────────────────────────
+def load_finance_config() -> pd.DataFrame:
+    """Load data/finance_config.csv. Never cached — always reads fresh."""
+    if FINANCE_CONFIG_PATH.exists():
+        try:
+            return pd.read_csv(FINANCE_CONFIG_PATH)
+        except Exception:
+            pass
+    return pd.DataFrame(columns=_FINANCE_CONFIG_COLS)
+
+
+def save_finance_config_entry(name: str, type_: str, amount_per_year: float,
+                               employer_match: float = 0.0, notes: str = "") -> None:
+    """Append one contribution entry to data/finance_config.csv."""
+    cfg = load_finance_config()
+    cfg = pd.concat([cfg, pd.DataFrame([{
+        "Name":          name.strip(),
+        "Type":          type_,
+        "AmountPerYear": round(float(amount_per_year), 2),
+        "EmployerMatch": round(float(employer_match), 2),
+        "Notes":         notes.strip(),
+    }])], ignore_index=True)
+    cfg.to_csv(FINANCE_CONFIG_PATH, index=False)
 
 
 # ── Data loading ──────────────────────────────────────────────────────────────
@@ -161,6 +242,47 @@ def load_all() -> pd.DataFrame:
     # Backward-compat: existing merged.csv won't have RecordType
     if "RecordType" not in df.columns:
         df["RecordType"] = "expense"
+
+    # Apply overrides (runs after description cleaning so names match the UI)
+    if OVERRIDES_PATH.exists():
+        try:
+            ov = pd.read_csv(OVERRIDES_PATH, parse_dates=["Date"])
+            for _, ov_row in ov.iterrows():
+                mask = (
+                    (df["Date"].dt.date == ov_row["Date"].date()) &
+                    (df["Description"].str.lower() == str(ov_row["Description"]).lower()) &
+                    (df["Amount"].round(2) == round(float(ov_row["OriginalAmount"]), 2))
+                )
+                if ov_row["Action"] == "exclude":
+                    df = df[~mask].copy()
+                elif (ov_row["Action"] == "override"
+                      and pd.notna(ov_row.get("NewAmount"))
+                      and str(ov_row.get("NewAmount", "")).strip() != ""):
+                    df.loc[mask, "Amount"] = float(ov_row["NewAmount"])
+                elif (ov_row["Action"] == "recategorize"
+                      and pd.notna(ov_row.get("NewCategory"))
+                      and str(ov_row.get("NewCategory", "")).strip() != ""):
+                    df.loc[mask, "Category"] = str(ov_row["NewCategory"])
+        except Exception:
+            pass  # Don't crash if overrides.csv is malformed
+
+    # Apply custom transfer keywords — reclassify matching expense/income rows
+    if CUSTOM_KEYWORDS_PATH.exists():
+        try:
+            kws = load_custom_keywords()
+            kw_list = [k.lower().strip() for k in kws["Keyword"].dropna() if str(k).strip()]
+            if kw_list:
+                mask_kw = (
+                    df["RecordType"].isin(["expense", "income"]) &
+                    df["Description"].str.lower().apply(
+                        lambda d: any(kw in d for kw in kw_list)
+                    )
+                )
+                df.loc[mask_kw, "RecordType"] = "transfer"
+                df.loc[mask_kw, "Category"]   = "Transfer"
+        except Exception:
+            pass
+
     return df
 
 
@@ -308,6 +430,61 @@ def detect_subscriptions(df: pd.DataFrame, min_occurrences: int = 2) -> pd.DataF
         pd.DataFrame(results)
         .sort_values("Est Monthly Cost", ascending=False)
         .reset_index(drop=True)
+    )
+
+
+# ── Category drilldown renderer ───────────────────────────────────────────────
+def render_drilldown(df: pd.DataFrame, title: str) -> None:
+    """Render a styled transaction table for a selected category or filter."""
+    st.markdown(f"<div class='section-title'>{title}</div>", unsafe_allow_html=True)
+
+    if df.empty:
+        st.info("No transactions found.")
+        return
+
+    total = df["Amount"].sum()
+    rows_html = ""
+    for _, row in df.iterrows():
+        date_str = row["Date"].strftime("%b %d, %Y") if hasattr(row["Date"], "strftime") else str(row["Date"])
+        card     = row.get("Card", "")
+        rows_html += (
+            f"<tr style='border-bottom:1px solid #F1F5F9;'>"
+            f"<td style='padding:10px 16px;font-family:\"DM Sans\",sans-serif;font-size:13px;"
+            f"color:#64748B;white-space:nowrap;'>{date_str}</td>"
+            f"<td style='padding:10px 16px;font-family:\"DM Sans\",sans-serif;font-size:14px;"
+            f"color:#0F172A;font-weight:500;'>{row['Description']}</td>"
+            f"<td style='padding:10px 16px;font-family:\"DM Sans\",sans-serif;font-size:13px;"
+            f"color:#94A3B8;'>{card}</td>"
+            f"<td style='padding:10px 16px;font-family:\"DM Mono\",monospace;font-size:14px;"
+            f"color:#0F172A;text-align:right;'>${row['Amount']:,.2f}</td>"
+            f"</tr>"
+        )
+    rows_html += (
+        f"<tr style='background:#F8FAFC;'>"
+        f"<td colspan='3' style='padding:10px 16px;font-family:\"DM Sans\",sans-serif;font-size:12px;"
+        f"font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.06em;"
+        f"text-align:right;'>Total</td>"
+        f"<td style='padding:10px 16px;font-family:\"DM Mono\",monospace;font-size:15px;"
+        f"font-weight:600;color:#1B3A6B;text-align:right;'>${total:,.2f}</td>"
+        f"</tr>"
+    )
+    st.markdown(
+        f"<div style='background:white;border-radius:12px;box-shadow:0 2px 8px rgba(27,58,107,0.08);"
+        f"border:1px solid rgba(27,58,107,0.07);overflow:hidden;margin-bottom:24px;'>"
+        f"<table style='width:100%;border-collapse:collapse;'>"
+        f"<thead><tr style='border-bottom:2px solid #F1F5F9;background:#F8FAFC;'>"
+        f"<th style='padding:10px 16px;font-family:\"DM Sans\",sans-serif;font-size:11px;font-weight:600;"
+        f"color:#475569;text-transform:uppercase;letter-spacing:0.06em;text-align:left;'>Date</th>"
+        f"<th style='padding:10px 16px;font-family:\"DM Sans\",sans-serif;font-size:11px;font-weight:600;"
+        f"color:#475569;text-transform:uppercase;letter-spacing:0.06em;text-align:left;'>Description</th>"
+        f"<th style='padding:10px 16px;font-family:\"DM Sans\",sans-serif;font-size:11px;font-weight:600;"
+        f"color:#475569;text-transform:uppercase;letter-spacing:0.06em;text-align:left;'>Card</th>"
+        f"<th style='padding:10px 16px;font-family:\"DM Sans\",sans-serif;font-size:11px;font-weight:600;"
+        f"color:#475569;text-transform:uppercase;letter-spacing:0.06em;text-align:right;'>Amount</th>"
+        f"</tr></thead>"
+        f"<tbody>{rows_html}</tbody>"
+        f"</table></div>",
+        unsafe_allow_html=True,
     )
 
 

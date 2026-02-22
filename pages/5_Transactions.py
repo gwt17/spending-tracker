@@ -168,10 +168,10 @@ transfers = df_all[df_all["RecordType"] == "transfer"] if "RecordType" in df_all
 with st.expander(f"Excluded transfers ({len(transfers):,} transactions hidden from spending)"):
     st.markdown(
         "<div style='font-family:\"DM Sans\",sans-serif;font-size:13px;color:#475569;"
-        "margin-bottom:12px;'>The following keywords are matched against transaction descriptions "
-        "(case-insensitive). Any checking account transaction matching these is excluded from "
-        "income and expense totals. To add more, edit <code>TRANSFER_KEYWORDS</code> in "
-        "<code>utils.py</code> and <code>merge.py</code>, then re-run <code>python merge.py</code>.</div>",
+        "margin-bottom:12px;'>Checking account transactions matching these keywords are excluded "
+        "from income and expense totals. To add more keywords or exclude specific transactions, "
+        "go to <strong>Manage → Overrides</strong>. "
+        "For a full breakdown of transfer activity, see <strong>Explore → Transfers</strong>.</div>",
         unsafe_allow_html=True,
     )
     kw_html = " ".join(

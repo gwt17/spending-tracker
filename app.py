@@ -12,6 +12,7 @@ from utils import (
     date_filter,
     inject_global_css,
     load_all,
+    render_drilldown,
 )
 
 # Must be first Streamlit command — applies to all pages via st.navigation
@@ -226,7 +227,23 @@ def dashboard():
                     font=dict(size=12, color="#64748B", family="DM Sans")),
     )
     st.markdown("<div class='section-title'>Monthly Spend</div>", unsafe_allow_html=True)
-    st.plotly_chart(fig_monthly, use_container_width=True)
+    st.markdown(
+        "<div style='font-family:\"DM Sans\",sans-serif;font-size:12px;color:#94A3B8;margin-bottom:4px;'>"
+        "Click a bar to see that month's transactions.</div>",
+        unsafe_allow_html=True,
+    )
+    monthly_event = st.plotly_chart(fig_monthly, use_container_width=True, on_select="rerun", key="dash_monthly")
+
+    # ── Monthly drilldown ─────────────────────────────────────────────────────
+    if monthly_event.selection["points"]:
+        sel_month = monthly_event.selection["points"][0].get("x")
+        if sel_month:
+            df_month_drill = df_exp[df_exp["YearMonth"].astype(str) == str(sel_month)]
+            if not df_month_drill.empty:
+                render_drilldown(
+                    df_month_drill.sort_values("Amount", ascending=False),
+                    f"{sel_month} — {len(df_month_drill)} transactions",
+                )
 
     # ── Category breakdown ────────────────────────────────────────────────────
     cat = (
@@ -273,9 +290,20 @@ def dashboard():
 
     st.markdown(
         f"<div style='background:white;border-radius:12px;padding:4px 20px 4px;box-shadow:var(--shadow-md);"
-        f"border:1px solid rgba(27,58,107,0.07);margin-bottom:24px;'>{rows_html}</div>",
+        f"border:1px solid rgba(27,58,107,0.07);margin-bottom:16px;'>{rows_html}</div>",
         unsafe_allow_html=True,
     )
+
+    # ── Category drilldown ────────────────────────────────────────────────────
+    top_cats = cat.head(7)["Category"].tolist()
+    drill_options = ["— Select a category to drill in —"] + top_cats
+    drill_cat = st.selectbox(
+        "Drill into category", drill_options,
+        label_visibility="collapsed", key="dash_cat_drill",
+    )
+    if drill_cat != "— Select a category to drill in —":
+        df_drill = df_exp[df_exp["Category"] == drill_cat].sort_values("Amount", ascending=False)
+        render_drilldown(df_drill, f"{drill_cat} — {len(df_drill)} transactions")
 
     # ── Explore navigation ────────────────────────────────────────────────────
     st.markdown("<div class='section-title'>Explore</div>", unsafe_allow_html=True)
@@ -299,11 +327,20 @@ pg = st.navigation({
     "Overview": [
         st.Page(dashboard, title="Dashboard", icon="💳", default=True),
     ],
+    "Review": [
+        st.Page("pages/6_Annual_Review.py",  title="Annual Review",  icon="📅"),
+        st.Page("pages/9_Money_Summary.py",  title="Money Summary",  icon="💰"),
+    ],
     "Explore": [
         st.Page("pages/5_Transactions.py",  title="Transactions",  icon="🧾"),
         st.Page("pages/1_Categories.py",    title="Categories",    icon="📊"),
         st.Page("pages/2_Merchants.py",     title="Merchants",     icon="🏪"),
         st.Page("pages/3_Subscriptions.py", title="Subscriptions", icon="🔄"),
+        st.Page("pages/8_Transfers.py",     title="Transfers",     icon="💸"),
+    ],
+    "Manage": [
+        st.Page("pages/7_Exclusions.py",     title="Overrides",      icon="✏️"),
+        st.Page("pages/10_Finance_Config.py", title="Finance Config", icon="⚙️"),
     ],
 })
 pg.run()
