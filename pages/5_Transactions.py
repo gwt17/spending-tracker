@@ -32,17 +32,35 @@ st.markdown("<div class='section-title'>Transactions</div>", unsafe_allow_html=T
 start, end, selected_card = date_filter(df_all, key="txn")
 
 # ── Additional filters row ────────────────────────────────────────────────────
-f1, f2, f3 = st.columns([2.5, 1.5, 1.5])
+f1, f2, f3, f4 = st.columns([2.5, 1.5, 1.2, 1.2])
 with f1:
-    search = st.text_input("Search", placeholder="Merchant name…", label_visibility="collapsed")
+    search = st.text_input("Search", placeholder="Search merchant or category…", label_visibility="collapsed")
 with f2:
     all_cats = ["All categories"] + sorted(df_all["Category"].unique().tolist())
     selected_cat = st.selectbox("Category", all_cats, label_visibility="collapsed")
 with f3:
+    record_type = st.selectbox(
+        "Type", ["All types", "Expenses", "Income", "Transfers"],
+        label_visibility="collapsed", key="txn_type",
+    )
+with f4:
     sort_by = st.selectbox(
         "Sort", ["Date ↓", "Date ↑", "Amount ↓", "Amount ↑"],
         label_visibility="collapsed",
     )
+
+# ── Amount range filter ───────────────────────────────────────────────────────
+amt_min_all = float(df_all["Amount"].min())
+amt_max_all = float(df_all["Amount"].max())
+a1, a2, _ = st.columns([1, 1, 4])
+with a1:
+    amt_min = st.number_input("Min amount", min_value=0.0, max_value=amt_max_all,
+                               value=0.0, step=10.0, format="%.0f",
+                               label_visibility="collapsed", placeholder="Min $")
+with a2:
+    amt_max = st.number_input("Max amount", min_value=0.0, max_value=amt_max_all,
+                               value=amt_max_all, step=10.0, format="%.0f",
+                               label_visibility="collapsed", placeholder="Max $")
 
 st.markdown("<div style='margin-bottom:8px;'></div>", unsafe_allow_html=True)
 
@@ -52,9 +70,17 @@ df = df[(df["Date"].dt.date >= start) & (df["Date"].dt.date <= end)]
 if selected_card != "All cards":
     df = df[df["Card"] == selected_card]
 if search:
-    df = df[df["Description"].str.contains(search, case=False, na=False)]
+    mask = (
+        df["Description"].str.contains(search, case=False, na=False) |
+        df["Category"].str.contains(search, case=False, na=False)
+    )
+    df = df[mask]
 if selected_cat != "All categories":
     df = df[df["Category"] == selected_cat]
+type_map = {"Expenses": "expense", "Income": "income", "Transfers": "transfer"}
+if record_type in type_map:
+    df = df[df["RecordType"] == type_map[record_type]]
+df = df[(df["Amount"] >= amt_min) & (df["Amount"] <= amt_max)]
 
 sort_map = {
     "Date ↓":   ("Date", False),
@@ -66,8 +92,8 @@ sort_col, sort_asc = sort_map[sort_by]
 df = df.sort_values(sort_col, ascending=sort_asc).reset_index(drop=True)
 
 # ── Summary bar ───────────────────────────────────────────────────────────────
-df_exp_view    = df[df["RecordType"] == "expense"] if "RecordType" in df.columns else df
-df_income_view = df[df["RecordType"] == "income"]  if "RecordType" in df.columns else df.iloc[:0]
+df_exp_view    = df[df["RecordType"] == "expense"]
+df_income_view = df[df["RecordType"] == "income"]
 total_spend  = df_exp_view["Amount"].sum()
 total_income = df_income_view["Amount"].sum()
 count        = len(df)

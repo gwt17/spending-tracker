@@ -5,15 +5,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import plotly.express as px
 import streamlit as st
 
-from utils import CAT_COLORS, chart_layout, date_filter, inject_global_css, load_all
+from utils import CAT_COLORS, chart_layout, date_filter, inject_global_css, load_all, render_nav_bar, render_stat_card
 
 inject_global_css()
-
-st.markdown(
-    "<a href='/' target='_self' style='font-family:\"DM Sans\",sans-serif;font-size:13px;"
-    "color:#1B3A6B;text-decoration:none;font-weight:500;'>← Dashboard</a>",
-    unsafe_allow_html=True,
-)
+render_nav_bar()
 
 # ── Load data ─────────────────────────────────────────────────────────────────
 if "df_all" in st.session_state and not st.session_state["df_all"].empty:
@@ -41,8 +36,17 @@ if df.empty:
     st.stop()
 
 # ── Large Transactions ────────────────────────────────────────────────────────
-percentile = st.slider("Flag transactions in the top X% by amount", 1, 25, 5)
-threshold  = df["Amount"].quantile(1 - percentile / 100)
+max_amount  = int(df["Amount"].quantile(0.99))
+default_val = max(50, int(df["Amount"].quantile(0.90) / 50) * 50)  # round to nearest $50
+
+threshold = st.slider(
+    "Minimum transaction amount",
+    min_value=50,
+    max_value=max(max_amount, 100),
+    value=min(default_val, max_amount),
+    step=50,
+    format="$%d",
+)
 large = (
     df[df["Amount"] >= threshold]
     .sort_values("Amount", ascending=False)
@@ -50,9 +54,9 @@ large = (
 )
 
 c1, c2, c3 = st.columns(3)
-c1.metric("Threshold",            f"${threshold:,.2f}")
-c2.metric("Flagged Transactions", f"{len(large):,}")
-c3.metric("Total Flagged Spend",  f"${large['Amount'].sum():,.2f}")
+c1.markdown(render_stat_card("Min Threshold",        f"${threshold:,.0f}"),             unsafe_allow_html=True)
+c2.markdown(render_stat_card("Flagged Transactions", f"{len(large):,}"),                unsafe_allow_html=True)
+c3.markdown(render_stat_card("Total Flagged Spend",  f"${large['Amount'].sum():,.0f}"), unsafe_allow_html=True)
 
 fig7 = px.scatter(
     large, x="Date", y="Amount", color="Category",

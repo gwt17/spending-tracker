@@ -6,21 +6,10 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from utils import ACCENT, CAT_COLORS, chart_layout, date_filter, inject_global_css, load_all, render_drilldown
+from utils import ACCENT, CAT_COLORS, chart_layout, date_filter, inject_global_css, load_all, render_drilldown, render_nav_bar, render_stat_card
 
 inject_global_css()
-
-nav_l, nav_r = st.columns([6, 1])
-with nav_l:
-    st.markdown(
-        "<a href='/' target='_self' style='font-family:\"DM Sans\",sans-serif;font-size:13px;"
-        "color:#1B3A6B;text-decoration:none;font-weight:500;'>← Dashboard</a>",
-        unsafe_allow_html=True,
-    )
-with nav_r:
-    if st.button("↺ Reload", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
+render_nav_bar()
 
 # ── Load data (always fresh — @st.cache_data handles perf) ───────────────────
 df_all = load_all()
@@ -75,18 +64,10 @@ if not small.empty and other_threshold > 0:
     )
 
 # ── Summary metrics ────────────────────────────────────────────────────────────
-def _stat(label, value):
-    return (f"<div style='background:white;border-radius:10px;padding:16px 20px;"
-            f"box-shadow:0 2px 8px rgba(27,58,107,0.08);border:1px solid rgba(27,58,107,0.07);'>"
-            f"<div style='font-family:\"DM Sans\",sans-serif;font-size:11px;font-weight:600;"
-            f"color:#475569;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;'>{label}</div>"
-            f"<div style='font-family:\"DM Mono\",monospace;font-size:22px;font-weight:500;color:#0F172A;'>{value}</div>"
-            f"</div>")
-
 m1, m2, m3 = st.columns(3)
-m1.markdown(_stat("Total Spend",  f"${total_spend:,.2f}"),               unsafe_allow_html=True)
-m2.markdown(_stat("Categories",   str(len(cat_full))),                   unsafe_allow_html=True)
-m3.markdown(_stat("Avg per Txn",  f"${cat_full['Avg per Txn'].mean():,.2f}"), unsafe_allow_html=True)
+m1.markdown(render_stat_card("Total Spend",  f"${total_spend:,.2f}"),               unsafe_allow_html=True)
+m2.markdown(render_stat_card("Categories",   str(len(cat_full))),                   unsafe_allow_html=True)
+m3.markdown(render_stat_card("Avg per Txn",  f"${cat_full['Avg per Txn'].mean():,.2f}"), unsafe_allow_html=True)
 
 # ── Horizontal bar chart ───────────────────────────────────────────────────────
 fig = px.bar(

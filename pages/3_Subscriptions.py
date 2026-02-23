@@ -4,21 +4,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import streamlit as st
 
-from utils import CAT_COLORS, date_filter, detect_subscriptions, inject_global_css, load_all
+from utils import date_filter, detect_subscriptions, inject_global_css, load_all, render_nav_bar
 
 inject_global_css()
-
-nav_l, nav_r = st.columns([6, 1])
-with nav_l:
-    st.markdown(
-        "<a href='/' target='_self' style='font-family:\"DM Sans\",sans-serif;font-size:13px;"
-        "color:#1B3A6B;text-decoration:none;font-weight:500;'>← Dashboard</a>",
-        unsafe_allow_html=True,
-    )
-with nav_r:
-    if st.button("↺ Reload", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
+render_nav_bar()
 
 # ── Load data (always fresh — @st.cache_data handles perf) ───────────────────
 df_all = load_all()
@@ -52,18 +41,25 @@ if subs.empty:
 monthly_sub  = subs["Est Monthly Cost"].sum()
 annual_sub   = monthly_sub * 12
 
-def _stat(label, value):
-    return (f"<div style='background:white;border-radius:10px;padding:16px 20px;"
-            f"box-shadow:0 2px 8px rgba(27,58,107,0.08);border:1px solid rgba(27,58,107,0.07);'>"
-            f"<div style='font-family:\"DM Sans\",sans-serif;font-size:11px;font-weight:600;"
-            f"color:#475569;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;'>{label}</div>"
-            f"<div style='font-family:\"DM Mono\",monospace;font-size:22px;font-weight:500;color:#0F172A;'>{value}</div>"
-            f"</div>")
-
-m1, m2, m3 = st.columns(3)
-m1.markdown(_stat("Detected",     f"{len(subs)} subscriptions"), unsafe_allow_html=True)
-m2.markdown(_stat("Est. Monthly", f"${monthly_sub:,.2f}"),       unsafe_allow_html=True)
-m3.markdown(_stat("Est. Annual",  f"${annual_sub:,.2f}"),        unsafe_allow_html=True)
+st.markdown(f"""
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:8px;">
+    <div class="card card-primary">
+        <div class="card-label">Est. Annual Cost</div>
+        <div class="card-value">${annual_sub:,.0f}</div>
+        <div class="card-sub neutral">${monthly_sub:,.0f} / month</div>
+    </div>
+    <div class="card">
+        <div class="card-label">Est. Monthly Cost</div>
+        <div class="card-value">${monthly_sub:,.0f}</div>
+        <div class="card-sub neutral">across all subscriptions</div>
+    </div>
+    <div class="card">
+        <div class="card-label">Detected</div>
+        <div class="card-value">{len(subs)}</div>
+        <div class="card-sub neutral">subscriptions</div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 st.markdown("<div style='margin-bottom:16px;'></div>", unsafe_allow_html=True)
 
@@ -72,7 +68,8 @@ cadence_colors = {"Monthly": "#2563EB", "Annual": "#8B5CF6", "Quarterly": "#0EA5
 
 rows_html = ""
 for _, row in subs.sort_values("Est Monthly Cost", ascending=False).iterrows():
-    color = cadence_colors.get(row["Cadence"], "#64748B")
+    color      = cadence_colors.get(row["Cadence"], "#64748B")
+    est_annual = row["Est Monthly Cost"] * 12
     rows_html += f"""
 <tr style="border-bottom:1px solid #F1F5F9;">
   <td style="padding:12px 16px;font-family:'DM Sans',sans-serif;font-size:14px;color:#0F172A;font-weight:500;">{row['Merchant']}</td>
@@ -82,8 +79,18 @@ for _, row in subs.sort_values("Est Monthly Cost", ascending=False).iterrows():
   </td>
   <td style="padding:12px 16px;font-family:'DM Mono',monospace;font-size:14px;color:#0F172A;text-align:right;">${row['Avg Charge']:,.2f}</td>
   <td style="padding:12px 16px;font-family:'DM Mono',monospace;font-size:14px;color:#0F172A;text-align:right;">${row['Est Monthly Cost']:,.2f}</td>
+  <td style="padding:12px 16px;font-family:'DM Mono',monospace;font-size:14px;font-weight:600;color:#1B3A6B;text-align:right;">${est_annual:,.0f}</td>
   <td style="padding:12px 16px;font-family:'DM Sans',sans-serif;font-size:13px;color:#475569;text-align:right;">{int(row['Occurrences'])}×</td>
   <td style="padding:12px 16px;font-family:'DM Sans',sans-serif;font-size:13px;color:#475569;">{str(row['Last Seen'])}</td>
+</tr>"""
+
+annual_total = subs["Est Monthly Cost"].sum() * 12
+rows_html += f"""
+<tr style="background:#F8FAFC;">
+  <td colspan="4" style="padding:10px 16px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;
+  color:#475569;text-transform:uppercase;letter-spacing:0.06em;text-align:right;">Total Est. Annual</td>
+  <td style="padding:10px 16px;font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:#1B3A6B;text-align:right;">${annual_total:,.0f}</td>
+  <td colspan="2"></td>
 </tr>"""
 
 st.markdown(f"""
@@ -96,6 +103,7 @@ border:1px solid rgba(27,58,107,0.07);overflow:hidden;">
         <th style="padding:10px 16px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.06em;text-align:left;">Cadence</th>
         <th style="padding:10px 16px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.06em;text-align:right;">Per Charge</th>
         <th style="padding:10px 16px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.06em;text-align:right;">Est / Month</th>
+        <th style="padding:10px 16px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.06em;text-align:right;">Est Annual</th>
         <th style="padding:10px 16px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.06em;text-align:right;">Occurrences</th>
         <th style="padding:10px 16px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.06em;text-align:left;">Last Seen</th>
       </tr>

@@ -7,22 +7,10 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from utils import ACCENT, CAT_COLORS, chart_layout, detect_subscriptions, inject_global_css, load_all, render_drilldown
+from utils import ACCENT, CAT_COLORS, chart_layout, detect_subscriptions, inject_global_css, load_all, render_drilldown, render_nav_bar, render_stat_card
 
 inject_global_css()
-
-# ── Nav bar ───────────────────────────────────────────────────────────────────
-nav_l, nav_r = st.columns([6, 1])
-with nav_l:
-    st.markdown(
-        "<a href='/' target='_self' style='font-family:\"DM Sans\",sans-serif;font-size:13px;"
-        "color:#1B3A6B;text-decoration:none;font-weight:500;'>← Dashboard</a>",
-        unsafe_allow_html=True,
-    )
-with nav_r:
-    if st.button("↺ Reload", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
+render_nav_bar()
 
 # ── Load data ─────────────────────────────────────────────────────────────────
 df_all = load_all()
@@ -34,15 +22,12 @@ if df_all.empty:
 st.markdown("""
 <div style="
     background: linear-gradient(135deg, #1B3A6B 0%, #2563EB 100%);
-    border-radius: 14px;
-    padding: 28px 32px;
-    margin-bottom: 20px;
+    border-radius: 10px;
+    padding: 14px 24px;
+    margin-bottom: 16px;
 ">
-    <div style="font-family:'DM Mono',monospace;font-size:28px;font-weight:500;color:white;letter-spacing:-0.02em;">
+    <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:500;color:white;letter-spacing:-0.02em;">
         Annual Review
-    </div>
-    <div style="font-family:'DM Sans',sans-serif;font-size:13px;color:rgba(255,255,255,0.65);margin-top:6px;">
-        Year-over-year spending breakdown
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -83,21 +68,6 @@ if df_exp.empty:
     st.warning(f"No expense transactions found for {selected_year}.")
     st.stop()
 
-# ── Stat card helper ──────────────────────────────────────────────────────────
-def _stat(label, value, sub=None):
-    sub_html = (
-        f"<div style='font-family:\"DM Sans\",sans-serif;font-size:12px;"
-        f"color:#64748B;margin-top:4px;'>{sub}</div>"
-    ) if sub else ""
-    return (
-        f"<div style='background:white;border-radius:10px;padding:16px 20px;"
-        f"box-shadow:0 2px 8px rgba(27,58,107,0.08);border:1px solid rgba(27,58,107,0.07);'>"
-        f"<div style='font-family:\"DM Sans\",sans-serif;font-size:11px;font-weight:600;"
-        f"color:#475569;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;'>{label}</div>"
-        f"<div style='font-family:\"DM Mono\",monospace;font-size:22px;font-weight:500;color:#0F172A;'>{value}</div>"
-        f"{sub_html}</div>"
-    )
-
 # ── Hero metrics ──────────────────────────────────────────────────────────────
 total_spend  = df_exp["Amount"].sum()
 n_months_active = df_exp["YearMonth"].nunique()
@@ -112,13 +82,13 @@ if has_income:
 else:
     h1, h2, h3 = st.columns(3)
 
-h1.markdown(_stat("Total Spend",    f"${total_spend:,.0f}",    f"{n_months_active} months tracked"),  unsafe_allow_html=True)
-h2.markdown(_stat("Avg / Month",    f"${avg_per_month:,.0f}",  f"across active months"),              unsafe_allow_html=True)
-h3.markdown(_stat("Transactions",   f"{n_txns:,}",             f"{selected_year}"),                   unsafe_allow_html=True)
+h1.markdown(render_stat_card("Total Spend",    f"${total_spend:,.0f}",    f"{n_months_active} months tracked"),  unsafe_allow_html=True)
+h2.markdown(render_stat_card("Avg / Month",    f"${avg_per_month:,.0f}",  f"across active months"),              unsafe_allow_html=True)
+h3.markdown(render_stat_card("Transactions",   f"{n_txns:,}",             f"{selected_year}"),                   unsafe_allow_html=True)
 if has_income:
     net = total_income - total_spend
     net_label = f"+${net:,.0f} saved" if net >= 0 else f"-${abs(net):,.0f} over"
-    h4.markdown(_stat("Total Income", f"${total_income:,.0f}", net_label), unsafe_allow_html=True)
+    h4.markdown(render_stat_card("Total Income", f"${total_income:,.0f}", net_label), unsafe_allow_html=True)
 
 st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
@@ -321,11 +291,11 @@ with stat_col:
     variable_pct = 100 - fixed_pct
     s1, s2 = st.columns(2)
     s1.markdown(
-        _stat("Fixed Spend",    f"${fixed_spend:,.0f}",    f"{fixed_pct:.0f}% of total"),
+        render_stat_card("Fixed Spend",    f"${fixed_spend:,.0f}",    f"{fixed_pct:.0f}% of total"),
         unsafe_allow_html=True,
     )
     s2.markdown(
-        _stat("Variable Spend", f"${variable_spend:,.0f}", f"{variable_pct:.0f}% of total"),
+        render_stat_card("Variable Spend", f"${variable_spend:,.0f}", f"{variable_pct:.0f}% of total"),
         unsafe_allow_html=True,
     )
 

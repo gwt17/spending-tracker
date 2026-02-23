@@ -386,6 +386,16 @@ def date_filter(df: pd.DataFrame, key: str = "date", default_preset: str = "Last
 
 
 # ── Chart helpers ─────────────────────────────────────────────────────────────
+def format_year_month(ym_str: str) -> str:
+    """Convert '2025-11' → 'Nov 2025' for human-readable chart axis labels."""
+    import datetime
+    try:
+        y, m = int(ym_str[:4]), int(ym_str[5:7])
+        return datetime.date(y, m, 1).strftime("%b %Y")
+    except Exception:
+        return ym_str
+
+
 def chart_layout(height=None):
     d = dict(
         plot_bgcolor="white", paper_bgcolor="white",
@@ -488,6 +498,60 @@ def render_drilldown(df: pd.DataFrame, title: str) -> None:
     )
 
 
+# ── Shared UI component helpers ───────────────────────────────────────────────
+def render_stat_card(label: str, value: str, sub: str = None, value_color: str = "#0F172A") -> str:
+    """Return HTML for a small metric card. Render with unsafe_allow_html=True.
+
+    Drop-in replacement for the local _stat() helpers scattered across pages.
+    Supports an optional sub-label and custom value color.
+    """
+    sub_html = (
+        f"<div style='font-family:\"DM Sans\",sans-serif;font-size:12px;"
+        f"color:#64748B;margin-top:4px;'>{sub}</div>"
+    ) if sub else ""
+    return (
+        f"<div style='background:white;border-radius:10px;padding:16px 20px;"
+        f"box-shadow:0 2px 8px rgba(27,58,107,0.08);border:1px solid rgba(27,58,107,0.07);'>"
+        f"<div style='font-family:\"DM Sans\",sans-serif;font-size:11px;font-weight:600;"
+        f"color:#475569;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;'>{label}</div>"
+        f"<div style='font-family:\"DM Mono\",monospace;font-size:22px;font-weight:500;"
+        f"color:{value_color};'>{value}</div>"
+        f"{sub_html}</div>"
+    )
+
+
+def render_nav_bar() -> None:
+    """Render the standard ← Dashboard / ↺ Reload nav bar used on all detail pages."""
+    nav_l, nav_r = st.columns([6, 1])
+    with nav_l:
+        st.markdown(
+            "<a href='/' target='_self' style='font-family:\"DM Sans\",sans-serif;font-size:13px;"
+            "color:#1B3A6B;text-decoration:none;font-weight:500;'>← Dashboard</a>",
+            unsafe_allow_html=True,
+        )
+    with nav_r:
+        if st.button("↺ Reload", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+
+
+def check_data_warnings() -> None:
+    """Check for data file issues and surface warnings in the UI.
+
+    Call this after load_all() on any page that wants to notify the user of
+    problems that were silently swallowed during the cached data load.
+    """
+    if OVERRIDES_PATH.exists():
+        try:
+            pd.read_csv(OVERRIDES_PATH, parse_dates=["Date"])
+        except Exception as e:
+            st.warning(
+                f"⚠️ **overrides.csv** could not be parsed and was skipped — "
+                f"your overrides are not applied. Check the file for formatting issues. "
+                f"Details: `{e}`"
+            )
+
+
 # ── Insights engine ───────────────────────────────────────────────────────────
 def compute_insights(df: pd.DataFrame) -> list:
     if df.empty or df["YearMonth"].nunique() < 2:
@@ -510,6 +574,8 @@ def compute_insights(df: pd.DataFrame) -> list:
         dollar_change = this_month - baseline
         pct_change    = dollar_change / baseline if baseline > 0 else (1.0 if this_month > 0 else 0)
         if abs(pct_change) >= 0.20 and abs(dollar_change) >= 25:
+            if this_month == 0:
+                continue
             indicator = "spike" if dollar_change > 0 else "drop"
             insights.append({
                 "type": "category", "category": cat,
@@ -530,7 +596,7 @@ def compute_insights(df: pd.DataFrame) -> list:
             })
 
     insights.sort(key=lambda x: abs(x["dollar_change"]), reverse=True)
-    return insights[:5]
+    return insights[:4]
 
 
 # ── Global CSS ────────────────────────────────────────────────────────────────
@@ -540,9 +606,7 @@ def inject_global_css(accent: str = ACCENT) -> None:
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700&display=swap');
 
 html, body, .stApp {{
-    background-color: #F0F4FA;
-    background-image: radial-gradient(#1B3A6B14 1px, transparent 1px);
-    background-size: 20px 20px;
+    background-color: #F8FAFC;
     font-family: 'DM Sans', sans-serif;
     color: #0F172A;
 }}
@@ -611,10 +675,20 @@ html, body, .stApp {{
     color: #0F172A;
     font-family: 'DM Mono', monospace;
     font-size: 32px;
-    font-weight: 500;
+    font-weight: 600;
     letter-spacing: -0.02em;
     margin-top: 8px;
     line-height: 1;
+}}
+
+/* Primary KPI card — larger number, accent label */
+.card-primary .card-label {{
+    color: {accent};
+    opacity: 0.85;
+}}
+.card-primary .card-value {{
+    font-size: 42px;
+    color: {accent};
 }}
 .card-sub {{
     font-family: 'DM Sans', sans-serif;
@@ -630,9 +704,9 @@ html, body, .stApp {{
 .section-title {{
     color: #0F172A;
     font-family: 'DM Sans', sans-serif;
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 700;
-    margin: 28px 0 12px 0;
+    margin: 36px 0 14px 0;
     padding-left: 12px;
     border-left: 3px solid {accent};
 }}
@@ -660,7 +734,7 @@ html, body, .stApp {{
 .insight-row {{
     display: flex;
     gap: 12px;
-    overflow-x: auto;
+    overflow: hidden;
     padding-bottom: 8px;
     margin-bottom: 8px;
 }}

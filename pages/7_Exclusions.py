@@ -36,16 +36,12 @@ with nav_r:
 st.markdown("""
 <div style="
     background: linear-gradient(135deg, #1B3A6B 0%, #2563EB 100%);
-    border-radius: 14px;
-    padding: 28px 32px;
-    margin-bottom: 12px;
+    border-radius: 10px;
+    padding: 14px 24px;
+    margin-bottom: 16px;
 ">
-    <div style="font-family:'DM Mono',monospace;font-size:28px;font-weight:500;color:white;letter-spacing:-0.02em;">
+    <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:500;color:white;letter-spacing:-0.02em;">
         Transaction Overrides
-    </div>
-    <div style="font-family:'DM Sans',sans-serif;font-size:13px;color:rgba(255,255,255,0.65);margin-top:6px;">
-        Exclude transactions, correct amounts, fix categories, or add notes.
-        Changes apply across all pages immediately.
     </div>
 </div>
 """, unsafe_allow_html=True)

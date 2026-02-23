@@ -8,22 +8,10 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from utils import ACCENT, inject_global_css, load_all, load_finance_config, render_drilldown
+from utils import ACCENT, inject_global_css, load_all, load_finance_config, render_drilldown, render_nav_bar, render_stat_card
 
 inject_global_css()
-
-# ── Nav bar ───────────────────────────────────────────────────────────────────
-nav_l, nav_r = st.columns([6, 1])
-with nav_l:
-    st.markdown(
-        "<a href='/' target='_self' style='font-family:\"DM Sans\",sans-serif;font-size:13px;"
-        "color:#1B3A6B;text-decoration:none;font-weight:500;'>← Dashboard</a>",
-        unsafe_allow_html=True,
-    )
-with nav_r:
-    if st.button("↺ Reload", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
+render_nav_bar()
 
 # ── Load data ─────────────────────────────────────────────────────────────────
 df_all = load_all()
@@ -35,15 +23,12 @@ if df_all.empty:
 st.markdown("""
 <div style="
     background: linear-gradient(135deg, #1B3A6B 0%, #2563EB 100%);
-    border-radius: 14px;
-    padding: 28px 32px;
-    margin-bottom: 20px;
+    border-radius: 10px;
+    padding: 14px 24px;
+    margin-bottom: 16px;
 ">
-    <div style="font-family:'DM Mono',monospace;font-size:28px;font-weight:500;color:white;letter-spacing:-0.02em;">
+    <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:500;color:white;letter-spacing:-0.02em;">
         Money Summary
-    </div>
-    <div style="font-family:'DM Sans',sans-serif;font-size:13px;color:rgba(255,255,255,0.65);margin-top:6px;">
-        Your complete financial picture — spending, saving, and investing
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -78,7 +63,7 @@ total_invested = df_tfr["Amount"].sum()    if has_transfers else 0.0
 
 # Proration factor: how many months of data exist for this year
 months_tracked   = df_year["YearMonth"].nunique() if not df_year.empty else 0
-proration_factor = months_tracked / 12 if months_tracked > 0 else 1.0
+proration_factor = months_tracked / 12 if months_tracked > 0 else 0.0
 is_partial_year  = (selected_year == datetime.date.today().year) or (months_tracked < 12)
 
 # ── Finance config contributions ──────────────────────────────────────────────
@@ -109,22 +94,6 @@ total_saved = total_invested + total_contributions
 gross_income_est = total_income + pretax_you if has_income else 0.0
 savings_rate     = total_saved / gross_income_est * 100 if gross_income_est > 0 else None
 
-# ── Stat card helper ──────────────────────────────────────────────────────────
-def _stat(label, value, sub=None, value_color="#0F172A"):
-    sub_html = (
-        f"<div style='font-family:\"DM Sans\",sans-serif;font-size:12px;"
-        f"color:#64748B;margin-top:4px;'>{sub}</div>"
-    ) if sub else ""
-    return (
-        f"<div style='background:white;border-radius:10px;padding:16px 20px;"
-        f"box-shadow:0 2px 8px rgba(27,58,107,0.08);border:1px solid rgba(27,58,107,0.07);'>"
-        f"<div style='font-family:\"DM Sans\",sans-serif;font-size:11px;font-weight:600;"
-        f"color:#475569;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;'>{label}</div>"
-        f"<div style='font-family:\"DM Mono\",monospace;font-size:22px;font-weight:500;"
-        f"color:{value_color};'>{value}</div>"
-        f"{sub_html}</div>"
-    )
-
 # ── Hero metrics ──────────────────────────────────────────────────────────────
 st.markdown("<div class='section-title'>Overview</div>", unsafe_allow_html=True)
 
@@ -132,17 +101,17 @@ partial_note = f"~{months_tracked} of 12 months" if is_partial_year else f"full 
 
 if has_income:
     h1, h2, h3, h4 = st.columns(4)
-    h1.markdown(_stat("Take-home Income", f"${total_income:,.0f}", partial_note), unsafe_allow_html=True)
-    h2.markdown(_stat("Total Spend",      f"${total_spend:,.0f}",  partial_note, "#DC2626"), unsafe_allow_html=True)
-    h3.markdown(_stat("Total Saved",      f"${total_saved:,.0f}",  "transfers + contributions"), unsafe_allow_html=True)
+    h1.markdown(render_stat_card("Take-home Income", f"${total_income:,.0f}", partial_note), unsafe_allow_html=True)
+    h2.markdown(render_stat_card("Total Spend",      f"${total_spend:,.0f}",  partial_note, "#DC2626"), unsafe_allow_html=True)
+    h3.markdown(render_stat_card("Total Saved",      f"${total_saved:,.0f}",  "transfers + contributions"), unsafe_allow_html=True)
     rate_str = f"{savings_rate:.1f}%" if savings_rate is not None else "—"
     rate_sub = "of est. gross income" if total_contributions > 0 else "of take-home"
-    h4.markdown(_stat("Savings Rate", rate_str, rate_sub, "#10B981"), unsafe_allow_html=True)
+    h4.markdown(render_stat_card("Savings Rate", rate_str, rate_sub, "#10B981"), unsafe_allow_html=True)
 else:
     h1, h2, h3 = st.columns(3)
-    h1.markdown(_stat("Total Spend",      f"${total_spend:,.0f}",  partial_note, "#DC2626"), unsafe_allow_html=True)
-    h2.markdown(_stat("Total Invested",   f"${total_invested:,.0f}", "transfers to investments"), unsafe_allow_html=True)
-    h3.markdown(_stat("Contributions",    f"${total_contributions:,.0f}", "from Finance Config"), unsafe_allow_html=True)
+    h1.markdown(render_stat_card("Total Spend",      f"${total_spend:,.0f}",  partial_note, "#DC2626"), unsafe_allow_html=True)
+    h2.markdown(render_stat_card("Total Invested",   f"${total_invested:,.0f}", "transfers to investments"), unsafe_allow_html=True)
+    h3.markdown(render_stat_card("Contributions",    f"${total_contributions:,.0f}", "from Finance Config"), unsafe_allow_html=True)
     if not has_income:
         st.markdown(
             "<div style='font-family:\"DM Sans\",sans-serif;font-size:12px;color:#94A3B8;"

@@ -8,8 +8,10 @@ from utils import (
     ACCENT,
     CAT_COLORS,
     chart_layout,
+    check_data_warnings,
     compute_insights,
     date_filter,
+    format_year_month,
     inject_global_css,
     load_all,
     render_drilldown,
@@ -36,25 +38,21 @@ def dashboard():
             st.rerun()
         st.stop()
 
+    check_data_warnings()
+
     # ── Header banner ─────────────────────────────────────────────────────────
     st.markdown("""
 <div style="
     background: linear-gradient(135deg, #1B3A6B 0%, #2563EB 100%);
-    border-radius: 14px;
-    padding: 28px 32px;
-    margin-bottom: 20px;
+    border-radius: 10px;
+    padding: 14px 24px;
+    margin-bottom: 16px;
 ">
-    <div style="font-family:'DM Mono',monospace;font-size:28px;font-weight:500;color:white;letter-spacing:-0.02em;">
+    <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:500;color:white;letter-spacing:-0.02em;">
         Spending Dashboard
-    </div>
-    <div style="font-family:'DM Sans',sans-serif;font-size:13px;color:rgba(255,255,255,0.65);margin-top:6px;">
-        Your personal finance overview
     </div>
 </div>
 """, unsafe_allow_html=True)
-
-    # ── Hero placeholder (fills in after filters are applied) ─────────────────
-    hero_slot = st.empty()
 
     # ── Filter bar ────────────────────────────────────────────────────────────
     start, end, selected_card = date_filter(df_all, key="dash", default_preset="Last 3 months")
@@ -108,27 +106,26 @@ def dashboard():
         income_this_month = df_income[df_income["YearMonth"] == current_period]["Amount"].sum()
         net_this_month    = income_this_month - this_month_amt
         net_class = "down" if net_this_month >= 0 else "up"   # green if saving, red if over
-        net_arrow = "+" if net_this_month >= 0 else "-"
+        net_arrow = "▼" if net_this_month >= 0 else "▲"
 
     # ── Hero cards ────────────────────────────────────────────────────────────
     delta_class = "up" if mom_delta > 0 else "down"
-    delta_arrow = "↑" if mom_delta > 0 else "↓"
+    delta_arrow = "▲" if mom_delta > 0 else "▼"
     mom_vs_avg  = this_month_amt - avg_3m
     mom_avg_cls = "up" if mom_vs_avg > 0 else "down"
-    mom_avg_arr = "↑" if mom_vs_avg > 0 else "↓"
+    mom_avg_arr = "▲" if mom_vs_avg > 0 else "▼"
 
-    with hero_slot.container():
-        cols = "repeat(4,1fr)" if has_income else "repeat(3,1fr)"
-        income_card = f"""
+    cols = "repeat(4,1fr)" if has_income else "repeat(3,1fr)"
+    income_card = f"""
     <div class="card">
         <div class="card-label">Income This Month</div>
         <div class="card-value">${income_this_month:,.0f}</div>
         <div class="card-sub {net_class}">{net_arrow} ${abs(net_this_month):,.0f} net</div>
     </div>""" if has_income else ""
 
-        st.markdown(f"""
+    st.markdown(f"""
 <div style="display:grid;grid-template-columns:{cols};gap:14px;margin-bottom:8px;">
-    <div class="card">
+    <div class="card card-primary">
         <div class="card-label">This Month</div>
         <div class="card-value">${this_month_amt:,.0f}</div>
         <div class="card-sub {delta_class}">{delta_arrow} ${abs(mom_delta):,.0f} vs last month</div>
@@ -174,6 +171,8 @@ def dashboard():
 </div>"""
         st.markdown(f"<div class='insight-row'>{cards_html}</div>", unsafe_allow_html=True)
 
+    st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
+
     # ── Monthly spend chart ───────────────────────────────────────────────────
     monthly = (
         df_exp.groupby("YearMonth")["Amount"]
@@ -181,7 +180,9 @@ def dashboard():
         .rename(columns={"Amount": "Total"})
         .sort_values("YearMonth")
     )
-    monthly["Month"] = monthly["YearMonth"].astype(str)
+    monthly["YearMonthStr"] = monthly["YearMonth"].astype(str)
+    monthly["Month"]        = monthly["YearMonthStr"].map(format_year_month)
+    label_to_ym             = dict(zip(monthly["Month"], monthly["YearMonthStr"]))
     n_months    = len(monthly)
     avg_monthly = monthly["Total"].mean() if n_months else 0
 
@@ -194,7 +195,8 @@ def dashboard():
             .rename(columns={"Amount": "Income"})
             .sort_values("YearMonth")
         )
-        monthly_income["Month"] = monthly_income["YearMonth"].astype(str)
+        monthly_income["YearMonthStr"] = monthly_income["YearMonth"].astype(str)
+        monthly_income["Month"]        = monthly_income["YearMonthStr"].map(format_year_month)
         fig_monthly.add_trace(go.Bar(
             x=monthly_income["Month"], y=monthly_income["Income"],
             marker_color="#10B981", marker_opacity=0.35,
@@ -233,16 +235,18 @@ def dashboard():
         unsafe_allow_html=True,
     )
     monthly_event = st.plotly_chart(fig_monthly, use_container_width=True, on_select="rerun", key="dash_monthly")
+    st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
     # ── Monthly drilldown ─────────────────────────────────────────────────────
     if monthly_event.selection["points"]:
-        sel_month = monthly_event.selection["points"][0].get("x")
-        if sel_month:
-            df_month_drill = df_exp[df_exp["YearMonth"].astype(str) == str(sel_month)]
+        sel_label = monthly_event.selection["points"][0].get("x")
+        if sel_label:
+            sel_ym = label_to_ym.get(sel_label, sel_label)
+            df_month_drill = df_exp[df_exp["YearMonth"].astype(str) == sel_ym]
             if not df_month_drill.empty:
                 render_drilldown(
                     df_month_drill.sort_values("Amount", ascending=False),
-                    f"{sel_month} — {len(df_month_drill)} transactions",
+                    f"{sel_label} — {len(df_month_drill)} transactions",
                 )
 
     # ── Category breakdown ────────────────────────────────────────────────────
@@ -264,16 +268,16 @@ def dashboard():
     st.markdown("<div class='section-title'>Spending by Category</div>", unsafe_allow_html=True)
 
     rows_html = ""
-    for i, row in cat.head(7).iterrows():
+    for i, row in cat.head(10).iterrows():
         color = CAT_COLORS[i % len(CAT_COLORS)]
         this_m = current_by_cat.get(row["Category"], 0)
         base   = baseline_by_cat.get(row["Category"], 0)
         if base > 0:
             pct_chg = (this_m - base) / base
             if pct_chg > 0.10:
-                trend_icon, trend_color, trend_label = "↑", "#DC2626", f"+{pct_chg*100:.0f}%"
+                trend_icon, trend_color, trend_label = "▲", "#DC2626", f"+{pct_chg*100:.0f}%"
             elif pct_chg < -0.10:
-                trend_icon, trend_color, trend_label = "↓", "#16A34A", f"{pct_chg*100:.0f}%"
+                trend_icon, trend_color, trend_label = "▼", "#16A34A", f"{pct_chg*100:.0f}%"
             else:
                 trend_icon, trend_color, trend_label = "→", "#94A3B8", "stable"
         else:
@@ -295,7 +299,7 @@ def dashboard():
     )
 
     # ── Category drilldown ────────────────────────────────────────────────────
-    top_cats = cat.head(7)["Category"].tolist()
+    top_cats = cat.head(10)["Category"].tolist()
     drill_options = ["— Select a category to drill in —"] + top_cats
     drill_cat = st.selectbox(
         "Drill into category", drill_options,
@@ -305,21 +309,6 @@ def dashboard():
         df_drill = df_exp[df_exp["Category"] == drill_cat].sort_values("Amount", ascending=False)
         render_drilldown(df_drill, f"{drill_cat} — {len(df_drill)} transactions")
 
-    # ── Explore navigation ────────────────────────────────────────────────────
-    st.markdown("<div class='section-title'>Explore</div>", unsafe_allow_html=True)
-    nav1, nav2, nav3, nav4 = st.columns(4)
-    with nav1:
-        if st.button("🧾 Transactions", use_container_width=True):
-            st.switch_page("pages/5_Transactions.py")
-    with nav2:
-        if st.button("📊 Categories", use_container_width=True):
-            st.switch_page("pages/1_Categories.py")
-    with nav3:
-        if st.button("🏪 Merchants", use_container_width=True):
-            st.switch_page("pages/2_Merchants.py")
-    with nav4:
-        if st.button("🔄 Subscriptions", use_container_width=True):
-            st.switch_page("pages/3_Subscriptions.py")
 
 
 # ── Multipage navigation ──────────────────────────────────────────────────────
@@ -332,11 +321,12 @@ pg = st.navigation({
         st.Page("pages/9_Money_Summary.py",  title="Money Summary",  icon="💰"),
     ],
     "Explore": [
-        st.Page("pages/5_Transactions.py",  title="Transactions",  icon="🧾"),
-        st.Page("pages/1_Categories.py",    title="Categories",    icon="📊"),
-        st.Page("pages/2_Merchants.py",     title="Merchants",     icon="🏪"),
-        st.Page("pages/3_Subscriptions.py", title="Subscriptions", icon="🔄"),
-        st.Page("pages/8_Transfers.py",     title="Transfers",     icon="💸"),
+        st.Page("pages/5_Transactions.py",       title="Transactions",       icon="🧾"),
+        st.Page("pages/1_Categories.py",         title="Categories",         icon="📊"),
+        st.Page("pages/2_Merchants.py",          title="Merchants",          icon="🏪"),
+        st.Page("pages/3_Subscriptions.py",      title="Subscriptions",      icon="🔄"),
+        st.Page("pages/8_Transfers.py",          title="Transfers",          icon="💸"),
+        st.Page("pages/4_Large_Transactions.py", title="Large Transactions", icon="🔍"),
     ],
     "Manage": [
         st.Page("pages/7_Exclusions.py",     title="Overrides",      icon="✏️"),
