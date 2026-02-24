@@ -1,5 +1,9 @@
 # Spending Tracker — Claude Context
 
+> **This project is frozen.** The active project is the React + FastAPI app at
+> `../finance-dashboard/`. All new work happens there. This Streamlit app receives
+> correctness fixes only — no new features.
+
 ## What this is
 A personal finance dashboard for tracking credit card and checking account spending,
 savings, and investments. The user exports CSVs from their accounts; the app visualizes
