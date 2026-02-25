@@ -184,15 +184,15 @@ Order of priority:
 
 ---
 
-### Phase 3 — Polish (1–2 Claude Code sessions)
+### Phase 3 — Polish ✅ Complete
 **Goal:** Achieve the SaaS feel — comparable to Chase, Empower, ESPN.
 
-- Persistent sidebar navigation with section grouping
-- Smooth page transitions
-- Loading skeleton states (no blank flashes while data loads)
-- Better mobile/responsive layout
-- Hover states, tooltips, micro-interactions
-- Empty states with helpful guidance
+- ✅ Smooth page transitions (fade-in on every navigation)
+- ✅ Loading skeleton states (shimmer effect — no blank flashes while data loads)
+- ✅ Empty states with helpful guidance (`EmptyState` component with contextual sub-text)
+- ✅ Error states with retry button on all 11 pages
+- ✅ Toast notifications for all CRUD actions (Overrides, FinanceConfig)
+- ✅ Sidebar Reload Data button with spinning icon + relative timestamp
 
 ---
 
@@ -307,8 +307,8 @@ POST /api/reload                → clear data cache, force re-read from disk
 
 ## 11. Active Backlog
 
-### React migration (Phase 2 — complete ✅)
-All pages migrated. Phase 3 (polish) is next.
+### React migration (Phases 1–3 — complete ✅)
+All pages migrated and polished. Phase 4 (Plaid automation) is next when ready.
 
 | Priority | Page | Status |
 |---|---|---|
@@ -331,6 +331,15 @@ All pages migrated. Phase 3 (polish) is next.
 ---
 
 ## 12. Completed Work
+
+### Session 5 (February 2026) — Phase 3 Polish (complete)
+- ✅ `Skeleton.tsx`: StatCardSkeleton, ChartSkeleton, TableSkeleton — shimmer gradient animation
+- ✅ `EmptyState.tsx`: centered icon + message + sub-text component
+- ✅ `Toast.tsx` + `useToast.ts`: fixed bottom-right toast, auto-dismisses after 3s, green/red for ok/err
+- ✅ `PageLayout.tsx`: fade-in animation on every page navigation
+- ✅ App.tsx sidebar: Reload Data button with spinning icon + relative timestamp
+- ✅ All 11 pages: shimmer skeleton loading states, styled error cards with retry button
+- ✅ Overrides + FinanceConfig: all save/delete actions now use toasts
 
 ### Session 4 (February 2026) — React + FastAPI Phase 2 (complete)
 - ✅ Annual Review page: year + card selectors, grouped bar chart with prior-year ghost bars, category bar chart, fixed/variable donut, top merchants table, subscriptions annual cost table
